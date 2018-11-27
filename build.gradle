@@ -8,6 +8,7 @@ buildscript {
     dependencies {
         classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
         classpath 'se.transmode.gradle:gradle-docker:1.2'
+        classpath 'no.nils:wsdl2java:0.10'
     }
 }
 
@@ -15,8 +16,9 @@ apply plugin: 'java'
 apply plugin: 'docker'
 apply plugin: 'org.springframework.boot'
 apply plugin: 'io.spring.dependency-management'
+apply plugin: 'no.nils.wsdl2java'
 
-group = 'com.dish.es'
+group = 'com.journal.technical'
 version = '0.0.1-SNAPSHOT'
 sourceCompatibility = 1.8
 
@@ -32,25 +34,32 @@ configurations {
     jaxb
 }
 
-task genJaxb {
+wsdl2java {
+    generatedWsdlDir = file("$buildDir/generated-sources/jaxb")
+    wsdlDir = file("$projectDir/src/main/resources/wsdl")
+
+    wsdlsToGenerate = [
+        [
+            '-xjc-Xlombok',
+            '-xjc-Xbg',
+            '-mark-generated',
+            '-autoNameResolution',
+            '-b', "$projectDir/src/main/resources/binding.xjb",
+            '-wsdlLocation', 'classpath:wsdl/GetWeather.wsdl',
+            "$projectDir/src/main/resources/wsdl/GetWeather.wsdl"
+         ]
+    ]
+}
+
+task compileWsdlSource {
+
     ext.sourcesDir = "${buildDir}/generated-sources/jaxb"
     ext.classesDir = "${buildDir}/classes/jaxb"
-    ext.schema = "src/main/resources/wsdl/GetWeather.wsdl"
 
     outputs.dir classesDir
 
-    doLast() {
+    doLast {
         project.ant {
-            taskdef name: "xjc", classname: "com.sun.tools.xjc.XJCTask",
-                    classpath: configurations.jaxb.asPath
-            mkdir(dir: sourcesDir)
-            mkdir(dir: classesDir)
-
-            xjc(destdir: sourcesDir, schema: schema) {
-                arg(value: "-wsdl")
-                produces(dir: sourcesDir, includes: "**/*.java")
-            }
-
             javac(destdir: classesDir, source: 1.6, target: 1.6, debug: true,
                     debugLevel: "lines,vars,source",
                     classpath: configurations.jaxb.asPath) {
@@ -58,22 +67,31 @@ task genJaxb {
                 include(name: "**/*.java")
                 include(name: "*.java")
             }
-
-            copy(todir: classesDir) {
-                fileset(dir: sourcesDir, erroronmissingdir: false) {
-                    exclude(name: "**/*.java")
-                }
-            }
         }
     }
 }
 
 dependencies {
+
+    // import xjc plugin library so that below wsdl2java can use them during code generation
+    compile(
+            'org.jvnet.jaxb2_commons:jaxb2-basics-runtime:0.11.0',
+            'de.plushnikov.xjc:xjc-lombok-plugin:1.0',
+            'org.projectlombok:lombok:1.18.4'
+    )
+
+    // enable extension support for wsdl2java so that we can specify args in wsdlsToGenerate
+    wsdl2java 'org.jvnet.jaxb2_commons:jaxb2-basics-runtime:0.11.0'
+    wsdl2java 'org.jvnet.jaxb2_commons:jaxb2-basics:0.11.0'
+    wsdl2java 'de.plushnikov.xjc:xjc-lombok-plugin:1.0'
+   
+    jaxb("com.sun.xml.bind:jaxb-xjc:2.2.4-1")
+    jaxb("org.projectlombok:lombok:1.18.4")
+    compile(files(compileWsdlSource.classesDir).builtBy(compileWsdlSource))
+
+    implementation('org.apache.cxf:cxf-spring-boot-starter-jaxws:3.2.7')
     implementation('org.springframework.boot:spring-boot-starter-actuator')
     implementation('org.springframework.boot:spring-boot-starter-web-services')
-    compile("wsdl4j:wsdl4j:1.6.1")
-    jaxb("com.sun.xml.bind:jaxb-xjc:2.2.4-1")
-    compile(files(genJaxb.classesDir).builtBy(genJaxb))
     runtimeOnly('org.springframework.boot:spring-boot-devtools')
     testImplementation('org.springframework.boot:spring-boot-starter-test')
 }
@@ -88,7 +106,7 @@ dependencyManagement {
 bootJar {
     baseName = 'services'
     version = project.version
-    from genJaxb.classesDir
+    from compileWsdlSource.classesDir
 }
 // ---- END boot jar task to add generated classes ----//
 
@@ -105,3 +123,6 @@ task buildDocker(type: Docker, dependsOn: bootJar) {
     setEnvironment('JAVA_OPTS', '""')
     entryPoint(['sh', '-c', 'java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar /app.jar'])
 }
+
+compileWsdlSource.dependsOn wsdl2java
+build.dependsOn compileWsdlSource
