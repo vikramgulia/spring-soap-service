@@ -1,26 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:http="http://schemas.xmlsoap.org/wsdl/http/" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:mime="http://schemas.xmlsoap.org/wsdl/mime/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:v1="http://new.getWeatherService.namespace" xmlns:tns="http://new.getWeatherService.namespace" targetNamespace="http://new.getWeatherService.namespace">
 	<wsdl:types>
-		<xs:schema targetNamespace="http://new.getWeatherService.namespace" elementFormDefault="qualified">
+		<xs:schema targetNamespace="http://new.getWeatherService.namespace" elementFormDefault="unqualified">
 			<xs:element name="getWeatherRequest">
 				<xs:complexType>
-					<xs:choice>
-						<xs:element name="city" type="xs:string"/>
-						<xs:element name="zipcode">
-							<xs:simpleType>
-								<xs:restriction base="xs:string">
-									<xs:length value="5"/>
-								</xs:restriction>
-							</xs:simpleType>
-						</xs:element>
-					</xs:choice>
+					<xs:sequence>
+						<xs:element name="zipcode" type="v1:ZipCodeType"/>
+						<xs:element name="degree" type="v1:DegreeType" minOccurs="0"/>
+					</xs:sequence>
 				</xs:complexType>
 			</xs:element>
+			<xs:simpleType name="DegreeType">
+				<xs:restriction base="xs:string">
+					<xs:enumeration value="FARENHEIT"/>
+					<xs:enumeration value="CELSIUS"/>
+				</xs:restriction>
+			</xs:simpleType>
+			<xs:simpleType name="ZipCodeType">
+				<xs:restriction base="xs:string">
+					<xs:minLength value="5"/>
+					<xs:maxLength value="5"/>
+				</xs:restriction>
+			</xs:simpleType>
 			<xs:element name="getWeatherResponse">
 				<xs:complexType>
 					<xs:sequence>
 						<xs:element name="city" type="xs:string"/>
 						<xs:element name="weather" type="xs:string"/>
+						<xs:element name="temp" type="xs:string"/>
 					</xs:sequence>
 				</xs:complexType>
 			</xs:element>
@@ -30,7 +37,7 @@
 		<wsdl:part name="parameter" element="v1:getWeatherRequest"/>
 	</wsdl:message>
 	<wsdl:message name="getWeatherOutput">
-		<wsdl:part name="parameter" type="v1:getWeatherResponse"/>
+		<wsdl:part name="parameter" element="v1:getWeatherResponse"/>
 	</wsdl:message>
 	<wsdl:portType name="GetWeatherPortType">
 		<wsdl:operation name="getWeather">
